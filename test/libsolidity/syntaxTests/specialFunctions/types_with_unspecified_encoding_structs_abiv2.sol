@@ -1,3 +1,5 @@
+pragma experimental ABIEncoderV2;
+
 contract C {
     struct S { uint x; }
     S s;
@@ -9,5 +11,4 @@ contract C {
     }
 }
 // ----
-// TypeError: (139-140): This type cannot be encoded.
-// TypeError: (142-143): This type cannot be encoded.
+// Warning: (0-33): Experimental features are turned on. Do not use experimental features on live deployments.
