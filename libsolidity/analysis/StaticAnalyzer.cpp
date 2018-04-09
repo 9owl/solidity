@@ -21,6 +21,7 @@
  */
 
 #include <libsolidity/analysis/StaticAnalyzer.h>
+#include <libsolidity/analysis/ConstantEvaluator.h>
 #include <libsolidity/ast/AST.h>
 #include <libsolidity/interface/ErrorReporter.h>
 #include <memory>
@@ -228,6 +229,51 @@ bool StaticAnalyzer::visit(InlineAssembly const& _inlineAssembly)
 		}
 	}
 
+	return true;
+}
+
+bool StaticAnalyzer::visit(BinaryOperation const& _operation)
+{
+	if (
+		_operation.rightExpression().annotation().isConstant &&
+		(_operation.getOperator() == Token::Div || _operation.getOperator() == Token::Mod)
+	)
+		if (auto rhs = dynamic_pointer_cast<RationalNumberType const>(
+			ConstantEvaluator(m_errorReporter).evaluate(_operation.rightExpression())
+		))
+			if (rhs->literalValue(nullptr) == u256(0))
+				m_errorReporter.typeError(
+					_operation.location(),
+					(_operation.getOperator() == Token::Div) ? "Division by zero." : "Modulo zero."
+				);
+
+	return true;
+}
+
+bool StaticAnalyzer::visit(FunctionCall const& _functionCall)
+{
+	if (_functionCall.annotation().kind == FunctionCallKind::FunctionCall)
+	{
+		auto functionType = dynamic_pointer_cast<FunctionType const>(_functionCall.expression().annotation().type);
+		if (functionType->kind() == FunctionType::Kind::AddMod || functionType->kind() == FunctionType::Kind::MulMod)
+		{
+			solAssert(_functionCall.arguments().size() == 3, "");
+			if (
+				_functionCall.arguments()[2]->annotation().isConstant ||
+				_functionCall.arguments()[2]->annotation().type->category() == Type::Category::RationalNumber
+			)
+			{
+				if (auto lastArg = dynamic_pointer_cast<RationalNumberType const>(
+					ConstantEvaluator(m_errorReporter).evaluate(*(_functionCall.arguments())[2])
+				))
+					if (lastArg->literalValue(nullptr) == u256(0))
+						m_errorReporter.typeError(
+							_functionCall.location(),
+							"Arithmetic modulo zero."
+						);
+			}
+		}
+	}
 	return true;
 }
 
